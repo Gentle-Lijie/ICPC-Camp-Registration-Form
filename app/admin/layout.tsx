@@ -14,28 +14,62 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const pathname = usePathname();
   const router = useRouter();
   const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
 
-  // Simple client-side auth check (sessionStorage)
   useEffect(() => {
-    if (sessionStorage.getItem('admin_auth') === 'true') {
-      setAuthenticated(true);
-    }
+    const checkAuth = async () => {
+      try {
+        const res = await fetch('/api/admin/session', { cache: 'no-store' });
+        const data = await res.json();
+        setAuthenticated(Boolean(data.authenticated));
+      } catch {
+        setAuthenticated(false);
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
   }, []);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password === (process.env.NEXT_PUBLIC_ADMIN_PASSWORD || 'icpc2024camp')) {
-      sessionStorage.setItem('admin_auth', 'true');
+    setAuthError('');
+
+    const res = await fetch('/api/admin/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+
+    if (res.ok) {
       setAuthenticated(true);
-      setAuthError('');
+      setPassword('');
     } else {
-      setAuthError('密码错误');
+      const data = await res.json().catch(() => ({}));
+      setAuthError(data.error || '登录失败');
     }
   };
 
-  // Auth screen
+  const handleLogout = async () => {
+    await fetch('/api/admin/session', { method: 'DELETE' });
+    setAuthenticated(false);
+    setPassword('');
+    router.push('/admin');
+  };
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-dot-grid flex items-center justify-center p-6">
+        <div className="card-glow max-w-sm w-full p-8 animate-fade-in text-sm text-center">
+          正在验证管理员会话...
+        </div>
+      </div>
+    );
+  }
+
   if (!authenticated) {
     return (
       <div className="min-h-screen bg-dot-grid flex items-center justify-center p-6">
@@ -104,7 +138,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
 
         <div className="p-4 border-t" style={{ borderColor: 'var(--border)' }}>
-          <button className="sidebar-link w-full" onClick={() => { sessionStorage.removeItem('admin_auth'); setAuthenticated(false); }}>
+          <button className="sidebar-link w-full" onClick={handleLogout}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" />
             </svg>
