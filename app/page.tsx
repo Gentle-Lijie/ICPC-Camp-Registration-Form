@@ -69,6 +69,7 @@ export default function RegistrationPage() {
   const [oierdbResults, setOierdbResults] = useState<OIerDBResult[]>([]);
   const [selectedOier, setSelectedOier] = useState<OIerDBResult | null>(null);
   const [oierdbSearching, setOierdbSearching] = useState(false);
+  const [oierdbSearched, setOierdbSearched] = useState(false);
   const [oierdbSkipped, setOierdbSkipped] = useState(false);
   const [questionResponses, setQuestionResponses] = useState<Record<number, string>>({});
 
@@ -113,8 +114,9 @@ export default function RegistrationPage() {
       const res = await fetch(`/api/oierdb/search?q=${encodeURIComponent(name)}`);
       const data = await res.json();
       setOierdbResults(data.result || []);
+      setOierdbSearched(true);
       if (!data.result || data.result.length === 0) showToast('未找到匹配记录，可以跳过', 'error');
-    } catch { showToast('网络错误', 'error'); }
+    } catch { showToast('网络错误', 'error'); setOierdbSearched(true); }
     setOierdbSearching(false);
   }, [formData.name, showToast]);
 
@@ -138,8 +140,12 @@ export default function RegistrationPage() {
       }
     }
     if (currentStepKey === 'oierdb') {
+      if (!oierdbSearched) {
+        showToast('请先点击搜索', 'error');
+        return false;
+      }
       if (!selectedOier && !oierdbSkipped) {
-        showToast('请选择你的身份或跳过', 'error');
+        showToast('请选择一条记录或跳过', 'error');
         return false;
       }
     }
@@ -289,7 +295,12 @@ export default function RegistrationPage() {
         return (
           <div>
             <h3 className="font-display text-lg font-semibold mb-1">{currentStep.title}</h3>
-            {currentStep.description && <p className="text-xs mb-6" style={{ color: 'var(--text-muted)' }}>{currentStep.description}</p>}
+            {/* 更醒目的步骤说明 */}
+            <div className="rounded-lg p-3 mb-6" style={{ background: 'rgba(0, 229, 255, 0.06)', border: '1px solid var(--border-accent)' }}>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                我们将在 OIerDB 中搜索你的竞赛记录。如果你在里面，点击选择即可关联；如果找不到也完全没问题，<span className="font-semibold" style={{ color: 'var(--accent)' }}>直接点下一步跳过即可</span>。
+              </p>
+            </div>
             <div className="flex gap-3 mb-6">
               <input type="text" className="input-field flex-1 font-mono" placeholder="输入姓名搜索..." value={formData.name || ''} onChange={e => setField('name', e.target.value)} />
               <button className="btn-primary flex items-center gap-2" onClick={searchOIerDB} disabled={oierdbSearching}>
@@ -299,10 +310,21 @@ export default function RegistrationPage() {
             </div>
             {oierdbResults.length > 0 && (
               <div className="space-y-3 mb-4">
-                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>找到 {oierdbResults.length} 条匹配，请选择你自己：</p>
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  找到 {oierdbResults.length} 条可能的记录，如果你在其中请点击选择：
+                </p>
                 {oierdbResults.slice(0, 8).map((oier, idx) => (
                   <div key={oier.id} className={`profile-card animate-slide-up ${selectedOier?.id === oier.id ? 'selected' : ''}`}
-                    style={{ animationDelay: `${idx * 0.05}s` }} onClick={() => { setSelectedOier(oier); setOierdbSkipped(false); }}>
+                    style={{ animationDelay: `${idx * 0.05}s` }} onClick={() => {
+                      // 点击已选中的卡片 → 取消选择；点击未选中 → 选中
+                      if (selectedOier?.id === oier.id) {
+                        setSelectedOier(null);
+                        setOierdbSkipped(false);
+                      } else {
+                        setSelectedOier(oier);
+                        setOierdbSkipped(false);
+                      }
+                    }}>
                     <div className="flex items-start justify-between mb-3">
                       <div>
                         <div className="flex items-center gap-2">
@@ -329,9 +351,11 @@ export default function RegistrationPage() {
                 ))}
               </div>
             )}
-            <div className="flex justify-center mt-4">
-              <button className="btn-secondary text-sm" onClick={() => { setOierdbSkipped(true); setSelectedOier(null); }}>找不到我，跳过此步骤</button>
-            </div>
+            {oierdbSearched && !selectedOier && (
+              <div className="flex justify-center mt-4">
+                <button className="btn-secondary text-sm" onClick={() => { setOierdbSkipped(true); setSelectedOier(null); nextStep(); }}>找不到我，跳过此步骤</button>
+              </div>
+            )}
           </div>
         );
 
@@ -553,7 +577,10 @@ export default function RegistrationPage() {
                 {submitting ? <><div className="spinner" style={{ borderTopColor: '#0A0E17' }} />提交中...</> : <><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 2L11 13" /><path d="M22 2l-7 20-4-9-9-4 20-7z" /></svg>确认提交</>}
               </button>
             ) : (
-              <button className="btn-primary" onClick={nextStep}>下一步 →</button>
+              <button className="btn-primary" onClick={nextStep}
+                disabled={currentStepKey === 'oierdb' && !oierdbSearched}>
+                下一步 →
+              </button>
             )}
           </div>
         </div>

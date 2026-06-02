@@ -145,4 +145,9 @@ vite.config.ts.timestamp-*
 .DS_Store
 .playwright-mcp/
 
+# SQLite database
+data/*.db
+data/*.db-shm
+data/*.db-wal
+
 
